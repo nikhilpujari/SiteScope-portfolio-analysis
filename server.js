@@ -94,7 +94,7 @@ app.get("/stats", (req, res) => {
   }
 });
 
-app.get('/', '/dashboard', (req, res) => {
+app.get(['/', '/dashboard'], (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
