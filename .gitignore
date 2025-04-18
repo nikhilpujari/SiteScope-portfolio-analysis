@@ -1,0 +1,4 @@
+/node_modules/
+analytics.db
+package-lock.json
+.DS_Store
