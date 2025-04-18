@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Website Analytics Dashboard</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      :root {
+        --primary-color: #4361ee;
+        --secondary-color: #3f37c9;
+        --success-color: #4cc9f0;
+        --light-color: #f8f9fa;
+        --dark-color: #212529;
+      }
+
+      body {
+        background-color: #f5f7fb;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      .dashboard-header {
+        background: linear-gradient(
+          135deg,
+          var(--primary-color),
+          var(--secondary-color)
+        );
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .card {
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        transition: transform 0.3s ease;
+        border: none;
+        margin-bottom: 20px;
+      }
+
+      .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .card-header {
+        background-color: white;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        font-weight: bold;
+        border-radius: 10px 10px 0 0 !important;
+      }
+
+      .stats-card {
+        text-align: center;
+        padding: 20px;
+      }
+
+      .stats-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--primary-color);
+      }
+
+      .stats-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .table-container {
+        overflow: auto;
+        max-height: 300px;
+      }
+
+      .loader {
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid var(--primary-color);
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 20px auto;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .bi {
+        margin-right: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container mt-4 mb-5">
+      <div class="dashboard-header">
+        <h1><i class="bi bi-graph-up"></i> Website Analytics Dashboard</h1>
+        <p>
+          Real-time insights into your website's performance and visitor
+          behavior
+        </p>
+      </div>
+
+      <!-- Key Metrics -->
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <div class="card stats-card">
+            <div class="stats-number" id="totalVisits">-</div>
+            <div class="stats-label">Total Page Views</div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card stats-card">
+            <div class="stats-number" id="uniqueVisitors">-</div>
+            <div class="stats-label">Unique Visitors</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <!-- Top Pages -->
+        <div class="col-md-6 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <i class="bi bi-file-earmark-text"></i> Top Pages
+            </div>
+            <div class="card-body">
+              <div id="topPagesLoader" class="loader"></div>
+              <canvas id="pagesChart" style="display: none"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Referrers -->
+        <div class="col-md-6 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <i class="bi bi-link-45deg"></i> Top Referrers
+            </div>
+            <div class="card-body">
+              <div id="referrersLoader" class="loader"></div>
+              <canvas id="referrersChart" style="display: none"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Locations -->
+        <div class="col-md-6 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <i class="bi bi-geo-alt"></i> Top Locations
+            </div>
+            <div class="card-body">
+              <div id="locationsLoader" class="loader"></div>
+              <div
+                id="locationsTable"
+                class="table-container"
+                style="display: none"
+              >
+                <table class="table table-hover">
+                  <thead>
+                    <tr>
+                      <th>Country</th>
+                      <th>City</th>
+                      <th>Views</th>
+                    </tr>
+                  </thead>
+                  <tbody id="locationsTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Visits -->
+        <div class="col-md-6 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <i class="bi bi-clock-history"></i> Recent Visits
+            </div>
+            <div class="card-body">
+              <div id="recentVisitsLoader" class="loader"></div>
+              <div
+                id="recentVisitsTable"
+                class="table-container"
+                style="display: none"
+              >
+                <table class="table table-hover">
+                  <thead>
+                    <tr>
+                      <th>Page</th>
+                      <th>Location</th>
+                      <th>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recentVisitsTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-center mt-3 mb-5">
+        <button id="refreshBtn" class="btn btn-primary">
+          <i class="bi bi-arrow-clockwise"></i> Refresh Data
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // Function to format dates
+      function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleString();
+      }
+
+      // Function to fetch data from the API
+      async function fetchData() {
+        try {
+          document.querySelectorAll(".loader").forEach((loader) => loader.style.display = "block");
+          document.getElementById("pagesChart").style.display = "none";
+          document.getElementById("referrersChart").style.display = "none";
+          document.getElementById("locationsTable").style.display = "none";
+          document.getElementById("recentVisitsTable").style.display = "none";
+
+          const statsResponse = await fetch("/stats");
+          const statsData = await statsResponse.json();
+
+          const analyticsResponse = await fetch("/analytics");
+          const analyticsData = await analyticsResponse.json();
+
+          updateDashboard(statsData, analyticsData);
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          alert("Failed to fetch data. Please try again later.");
+        }
+      }
+
+      // Function to update the dashboard with data
+      function updateDashboard(statsData, analyticsData) {
+        // Update key metrics (default to today)
+        document.getElementById("totalVisits").textContent =
+          statsData.total_views.toLocaleString();
+        document.getElementById("uniqueVisitors").textContent =
+          statsData.unique_visitors.toLocaleString();
+
+        // Store the original stats data for toggling
+        window.originalStats = {
+          total_views: statsData.total_views,
+          unique_visitors: statsData.unique_visitors,
+        };
+
+        // Reset all toggles to "today" as default
+        document.querySelectorAll(".stats-toggle-btn").forEach((btn) => {
+          btn.classList.remove("active");
+          if (btn.dataset.period === "today") {
+            btn.classList.add("active");
+          }
+        });
+
+        // Remove any existing no-data messages to prevent duplication
+        document.querySelectorAll(".no-data-message").forEach((el) => el.remove());
+
+        // Update visitors time chart (default to day view)
+        updateTimeChart("day");
+
+        // Show time range toggle
+        document.getElementById("timeToggle").style.display = "flex";
+
+        // Update top pages chart
+        updatePagesChart(statsData.top_pages || []);
+
+        // Update referrers chart
+        if (statsData.referrers && statsData.referrers.length > 0) {
+          updateReferrersChart(statsData.referrers);
+        } else {
+          // Show "Not enough data" for referrers
+          document.getElementById("referrersLoader").style.display = "none";
+          const cardBody = document
+            .getElementById("referrersLoader")
+            .closest(".card-body");
+          cardBody.classList.add("compact");
+
+          // Remove any existing no-data messages first
+          document.querySelectorAll("#referrersLoader + .no-data-message").forEach(el => el.remove());
+
+          const noDataMessage = document.createElement("div");
+          noDataMessage.className = "no-data-message";
+          noDataMessage.innerHTML = `
+            <i class="fas fa-link"></i>
+            <p>No referrer data available</p>
+          `;
+          document
+            .getElementById("referrersLoader")
+            .parentNode.insertBefore(
+              noDataMessage,
+              document.getElementById("referrersLoader").nextSibling
+            );
+        }
+
+        // Update locations table
+        if (statsData.top_locations && statsData.top_locations.length > 0) {
+          updateLocationsTable(statsData.top_locations, statsData.total_views);
+        } else {
+          // Show "Not enough data" for locations
+          document.getElementById("locationsLoader").style.display = "none";
+          const cardBody = document
+            .getElementById("locationsLoader")
+            .closest(".card-body");
+          cardBody.classList.add("compact");
+
+          // Remove any existing no-data messages first
+          document.querySelectorAll("#locationsLoader + .no-data-message").forEach(el => el.remove());
+
+          const noDataMessage = document.createElement("div");
+          noDataMessage.className = "no-data-message";
+          noDataMessage.innerHTML = `
+            <i class="fas fa-globe-americas"></i>
+            <p>No location data available</p>
+          `;
+          document
+            .getElementById("locationsLoader")
+            .parentNode.insertBefore(
+              noDataMessage,
+              document.getElementById("locationsLoader").nextSibling
+            );
+        }
+
+        // Update recent visits table
+        if (analyticsData && analyticsData.length > 0) {
+          updateRecentVisitsTable(analyticsData.slice(0, 10)); // Show only the 10 most recent visits
+        } else {
+          // Show "Not enough data" for recent visits
+          document.getElementById("recentVisitsLoader").style.display = "none";
+          const cardBody = document
+            .getElementById("recentVisitsLoader")
+            .closest(".card-body");
+          cardBody.classList.add("compact");
+
+          // Remove any existing no-data messages first
+          document.querySelectorAll("#recentVisitsLoader + .no-data-message").forEach(el => el.remove());
+
+          const noDataMessage = document.createElement("div");
+          noDataMessage.className = "no-data-message";
+          noDataMessage.innerHTML = `
+            <i class="fas fa-history"></i>
+            <p>No recent activity data available</p>
+          `;
+          document
+            .getElementById("recentVisitsLoader")
+            .parentNode.insertBefore(
+              noDataMessage,
+              document.getElementById("recentVisitsLoader").nextSibling
+            );
+        }
+      }
+
+      // Function to update the top pages chart
+      function updatePagesChart(pagesData) {
+        const ctx = document.getElementById("pagesChart").getContext("2d");
+
+        // Hide loader and show chart
+        document.getElementById("topPagesLoader").style.display = "none";
+        document.getElementById("pagesChart").style.display = "block";
+
+        // Extract labels and data
+        const labels = pagesData.map((page) => page.url || "/");
+        const data = pagesData.map((page) => page.views);
+
+        // Create or update chart
+        if (window.pagesChart) {
+          window.pagesChart.data.labels = labels;
+          window.pagesChart.data.datasets[0].data = data;
+          window.pagesChart.update();
+        } else {
+          window.pagesChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels: labels,
+              datasets: [
+                {
+                  label: "Page Views",
+                  data: data,
+                  backgroundColor: "#4361ee",
+                  borderColor: "#3f37c9",
+                  borderWidth: 1,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    precision: 0,
+                  },
+                },
+              },
+            },
+          });
+        }
+      }
+
+      // Function to update the referrers chart
+      function updateReferrersChart(referrersData) {
+        const ctx = document.getElementById("referrersChart").getContext("2d");
+
+        // Hide loader and show chart
+        document.getElementById("referrersLoader").style.display = "none";
+        document.getElementById("referrersChart").style.display = "block";
+
+        // Extract labels and data
+        const labels = referrersData.map((ref) => ref.referrer || "Direct");
+        const data = referrersData.map((ref) => ref.count);
+
+        // Define chart colors
+        const colors = ["#4cc9f0", "#4361ee", "#3a0ca3", "#7209b7", "#f72585"];
+
+        // Create or update chart
+        if (window.referrersChart) {
+          window.referrersChart.data.labels = labels;
+          window.referrersChart.data.datasets[0].data = data;
+          window.referrersChart.update();
+        } else {
+          window.referrersChart = new Chart(ctx, {
+            type: "doughnut",
+            data: {
+              labels: labels,
+              datasets: [
+                {
+                  data: data,
+                  backgroundColor: colors,
+                  borderWidth: 1,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: {
+                  position: "right",
+                },
+              },
+            },
+          });
+        }
+      }
+
+      // Function to update the locations table
+      function updateLocationsTable(locationsData, totalViews) {
+        const tableBody = document.getElementById("locationsTableBody");
+
+        // Hide loader and show table
+        document.getElementById("locationsLoader").style.display = "none";
+        document.getElementById("locationsTable").style.display = "block";
+
+        // Clear existing rows
+        tableBody.innerHTML = "";
+
+        // Add new rows
+        locationsData.forEach((location) => {
+          const row = document.createElement("tr");
+
+          const countryCell = document.createElement("td");
+          countryCell.textContent = location.country;
+
+          const cityCell = document.createElement("td");
+          cityCell.textContent = location.city;
+
+          const viewsCell = document.createElement("td");
+          viewsCell.textContent = location.views;
+
+          row.appendChild(countryCell);
+          row.appendChild(cityCell);
+          row.appendChild(viewsCell);
+
+          tableBody.appendChild(row);
+        });
+      }
+
+      // Function to update the recent visits table
+      function updateRecentVisitsTable(visitsData) {
+        const tableBody = document.getElementById("recentVisitsTableBody");
+
+        // Hide loader and show table
+        document.getElementById("recentVisitsLoader").style.display = "none";
+        document.getElementById("recentVisitsTable").style.display = "block";
+
+        // Clear existing rows
+        tableBody.innerHTML = "";
+
+        // Add new rows
+        visitsData.forEach((visit) => {
+          const row = document.createElement("tr");
+
+          const pageCell = document.createElement("td");
+          pageCell.textContent = visit.url || "/";
+
+          const locationCell = document.createElement("td");
+          locationCell.textContent = ${visit.city}, ${visit.country};
+
+          const timeCell = document.createElement("td");
+          timeCell.textContent = formatDate(visit.timestamp);
+
+          row.appendChild(pageCell);
+          row.appendChild(locationCell);
+          row.appendChild(timeCell);
+
+          tableBody.appendChild(row);
+        });
+      }
+
+      // Function to show "Not enough data" message
+      function showNoDataMessage(loaderId, containerId) {
+        const loader = document.getElementById(loaderId);
+
+        // Make card body compact
+        const cardBody = loader.closest('.card-body');
+        if (cardBody) {
+          cardBody.classList.add('compact');
+        }
+
+        // Hide loader
+        loader.style.display = "none";
+
+        // Remove any existing no-data messages first to prevent duplication
+        document.querySelectorAll(`#${loaderId} + .no-data-message`).forEach(el => el.remove());
+
+        // Add "Not enough data" message after the loader
+        const noDataMessage = document.createElement("div");
+        noDataMessage.className = "no-data-message";
+        noDataMessage.innerHTML = `
+          <i class="fas fa-chart-pie"></i>
+          <p>Not enough data available</p>
+        `;
+
+        loader.parentNode.insertBefore(noDataMessage, loader.nextSibling);
+      }
+
+      // Function to toggle stats time period
+      function updateStatsPeriod(metricType, period) {
+        // Remove any existing no-data messages to prevent duplication
+        document.querySelectorAll(".no-data-message").forEach(function(el) {
+          el.remove();
+        });
+
+        // Get the original stats value
+        const originalValue = window.originalStats
+          ? metricType === "views"
+            ? window.originalStats.total_views
+            : window.originalStats.unique_visitors
+          : 1;
+
+        // For now, we'll just display the same value for all time periods
+        // since we don't have real data for different periods
+        let value = originalValue;
+
+        // Update the display
+        const elementId =
+          metricType === "views" ? "totalVisits" : "uniqueVisitors";
+        document.getElementById(elementId).textContent = value.toLocaleString();
+      }
+
+      // Fetch data on page load
+      document.addEventListener("DOMContentLoaded", () => {
+        fetchData();
+
+        // Add refresh button event listener
+        document
+          .getElementById("refreshBtn")
+          .addEventListener("click", fetchData);
+      });
+    </script>
+  </body>
+</html>
