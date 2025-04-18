@@ -1,5 +1,5 @@
 (function () {
-    const endpoint = "http://localhost:3000/track";
+    const endpoint = window.__ANALYTICS_ENDPOINT__ || "http://localhost:3000/track";
     const data = {
       url: window.location.pathname,
       referrer: document.referrer,
