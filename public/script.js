@@ -8,10 +8,14 @@ document.addEventListener('DOMContentLoaded', function() {
   fetchData();
 
   // Add event listener to refresh button
-  document.getElementById('refreshBtn').addEventListener('click', fetchData);
+  document.getElementById('refreshBtn').addEventListener('click', () => fetchData(true));
 
   // Add event listeners to time range selector
-  document.getElementById('timeRangeSelect').addEventListener('change', fetchData);
+  document.getElementById('timeRangeSelect').addEventListener('change', () => {
+    if (dashboardData.statsData && dashboardData.analyticsData) {
+      updateDashboard(dashboardData.statsData, dashboardData.analyticsData);
+    }
+  });
   
   // Add event listener to export button (will be added to HTML)
   document.body.addEventListener('click', function(e) {
@@ -229,43 +233,46 @@ function updateVisitorTrendsChart() {
 }
 
 // Function to fetch data from the API
-async function fetchData() {
+async function fetchData(forceRefresh = false) {
   try {
+    // If we already have data and not forcing a refresh, just reuse it
+    if (!forceRefresh && dashboardData.statsData && dashboardData.analyticsData) {
+      updateDashboard(dashboardData.statsData, dashboardData.analyticsData);
+      return;
+    }
+
     // Show loaders
     document.querySelectorAll(".loader").forEach((loader) => loader.style.display = "block");
 
-    // Hide charts and tables
+    // Hide content before new load
     document.getElementById("pagesChart").style.display = "none";
     document.getElementById("referrersChart").style.display = "none";
     document.getElementById("locationsTable").style.display = "none";
     document.getElementById("recentVisitsTable").style.display = "none";
 
-    // Get selected time range
-    const timeRange = document.getElementById('timeRangeSelect').value;
-
-    // Fetch data from API
+    // Fetch new data
     const statsResponse = await fetch(`/stats`);
     const statsData = await statsResponse.json();
 
     const analyticsResponse = await fetch(`/analytics`);
     const analyticsData = await analyticsResponse.json();
 
-    // Update dashboard with the data
-    updateDashboard(statsData, analyticsData);
+    // Cache data
+    dashboardData = {
+      statsData,
+      analyticsData,
+      timestamp: new Date().toISOString(),
+      timeRange: document.getElementById('timeRangeSelect').value
+    };
 
-    // No need to initialize or update visitor trends here
-    // The call to updateVisitorTrendsChartFromAnalytics is made in updateDashboard
-    // This will generate chart data from actual analytics data
+    updateDashboard(statsData, analyticsData);
   } catch (error) {
     console.error("Error fetching data:", error);
-
-    // Hide loaders
     document.querySelectorAll(".loader").forEach((loader) => loader.style.display = "none");
-
-    // Show error messages
     showErrorState("Failed to fetch data. Please try again later.");
   }
 }
+
 
 // Function to show error state
 function showErrorState(message) {
@@ -673,58 +680,121 @@ function updateVisitorTrendsChartFromAnalytics(analyticsData, statsData) {
   
   switch(timeRange) {
     case 'today':
+      const hourBuckets = {
+        'Morning': 0,    // 6 AM - 12 PM
+        'Afternoon': 0,  // 12 PM - 6 PM
+        'Evening': 0,    // 6 PM - 12 AM
+        'Night': 0       // 12 AM - 6 AM
+      };
+
+      const visitorBuckets = {
+        'Morning': new Set(),
+        'Afternoon': new Set(),
+        'Evening': new Set(),
+        'Night': new Set()
+      };
+
+      analyticsData.forEach(visit => {
+        const date = new Date(visit.timestamp);
+        const hour = date.getHours();
+        const hashedId = visit.hashed_id;
+
+        if (hour >= 6 && hour < 12) {
+          hourBuckets['Morning']++;
+          visitorBuckets['Morning'].add(hashedId);
+        } else if (hour >= 12 && hour < 18) {
+          hourBuckets['Afternoon']++;
+          visitorBuckets['Afternoon'].add(hashedId);
+        } else if (hour >= 18 && hour < 24) {
+          hourBuckets['Evening']++;
+          visitorBuckets['Evening'].add(hashedId);
+        } else {
+          hourBuckets['Night']++;
+          visitorBuckets['Night'].add(hashedId);
+        }
+      });
+
       data.labels = ['Morning', 'Afternoon', 'Evening', 'Night'];
-      data.pageViews = [pageViews, 0, 0, 0];
-      data.visitors = [visitors, 0, 0, 0];
+      data.pageViews = data.labels.map(label => hourBuckets[label]);
+      data.visitors = data.labels.map(label => visitorBuckets[label].size);
       break;
+
     case 'week':
       data.labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      // Place views on today's day of week
-      const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
-      const dayIndex = today === 0 ? 6 : today - 1; // adjust to our array (Mon = 0, Sun = 6)
-      
+      const weekBuckets = Array(7).fill(0);
+      const weekVisitors = Array(7).fill().map(() => new Set());
+
+      analyticsData.forEach(visit => {
+        const date = new Date(visit.timestamp);
+        let dayIndex = date.getDay(); // 0 = Sunday
+        dayIndex = dayIndex === 0 ? 6 : dayIndex - 1; // Adjust to Mon = 0
+        weekBuckets[dayIndex]++;
+        weekVisitors[dayIndex].add(visit.hashed_id);
+      });
+
+      data.pageViews = weekBuckets;
+      data.visitors = weekVisitors.map(set => set.size);
+      break;
+
+    case 'month':
+      data.labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+      const monthBuckets = Array(4).fill(0);
+      const monthVisitors = Array(4).fill().map(() => new Set());
+
+      analyticsData.forEach(visit => {
+        const date = new Date(visit.timestamp);
+        const weekIndex = Math.min(Math.floor((date.getDate() - 1) / 7), 3);
+        monthBuckets[weekIndex]++;
+        monthVisitors[weekIndex].add(visit.hashed_id);
+      });
+
+      data.pageViews = monthBuckets;
+      data.visitors = monthVisitors.map(set => set.size);
+      break;
+
+    case 'year':
+      data.labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const yearBuckets = Array(12).fill(0);
+      const yearVisitors = Array(12).fill().map(() => new Set());
+
+      analyticsData.forEach(visit => {
+        const date = new Date(visit.timestamp);
+        const monthIndex = date.getMonth(); // 0 = Jan
+        yearBuckets[monthIndex]++;
+        yearVisitors[monthIndex].add(visit.hashed_id);
+      });
+
+      data.pageViews = yearBuckets;
+      data.visitors = yearVisitors.map(set => set.size);
+      break;
+
+    case 'all':
+      data.labels = ['2025', '2026', '2027', '2028', '2029', '2030'];
+      const allBuckets = Array(6).fill(0);
+      const allVisitors = Array(6).fill().map(() => new Set());
+
+      analyticsData.forEach(visit => {
+        const date = new Date(visit.timestamp);
+        const year = date.getFullYear();
+        const index = year - 2025;
+        if (index >= 0 && index < 6) {
+          allBuckets[index]++;
+          allVisitors[index].add(visit.hashed_id);
+        }
+      });
+
+      data.pageViews = allBuckets;
+      data.visitors = allVisitors.map(set => set.size);
+      break;
+
+    default:
+      data.labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       data.pageViews = Array(7).fill(0);
       data.visitors = Array(7).fill(0);
-      data.pageViews[dayIndex] = pageViews;
-      data.visitors[dayIndex] = visitors;
-      break;
-    case 'month':
-      // For month view, show 7 days with the current day having data
-      const days = ['Week 1', 'Week 2', 'Week 3', 'Week 4']; 
-      data.labels = days;
-      
-      data.pageViews = [0, 0, pageViews, 0];  // Place in week 3
-      data.visitors = [0, 0, visitors, 0];
-      break;
-    case 'year':
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      data.labels = months;
-      
-      // Place views on current month
-      const currentMonth = new Date().getMonth();
-      
-      data.pageViews = Array(12).fill(0);
-      data.visitors = Array(12).fill(0);
-      data.pageViews[currentMonth] = pageViews;
-      data.visitors[currentMonth] = visitors;
-      break;
-    case 'all':
-      data.labels = ['2020', '2021', '2022', '2023', '2024', '2025'];
-      data.pageViews = [0, 0, 0, 0, 0, pageViews];
-      data.visitors = [0, 0, 0, 0, 0, visitors];
-      break;
-    default:
-      // Default to week view
-      data.labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      data.pageViews = [0, 0, 0, 0, 0, 0, 0];
-      data.visitors = [0, 0, 0, 0, 0, 0, 0];
-      
-      // Place views on today's day of week
       const defaultToday = new Date().getDay();
       const defaultDayIndex = defaultToday === 0 ? 6 : defaultToday - 1;
-      
-      data.pageViews[defaultDayIndex] = pageViews;
-      data.visitors[defaultDayIndex] = visitors;
+      data.pageViews[defaultDayIndex] = statsData.total_views || 1;
+      data.visitors[defaultDayIndex] = statsData.unique_visitors || 1;
   }
 
   // If chart already exists, destroy it to ensure correct height
@@ -882,8 +952,3 @@ function exportDashboardData() {
     document.body.removeChild(link);
   }
 }
-
-// Initialize the dashboard on page load
-window.onload = function() {
-  fetchData();
-};
