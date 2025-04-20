@@ -314,8 +314,38 @@ function updateDashboard(statsData, analyticsData) {
     timeRange: document.getElementById('timeRangeSelect').value
   };
 
-  document.getElementById("totalVisits").textContent = statsData.total_views || "-";
-  document.getElementById("uniqueVisitors").textContent = statsData.unique_visitors || "-";
+  const timeRange = document.getElementById('timeRangeSelect').value;
+  let filteredVisits = analyticsData;
+
+  if (timeRange !== 'all') {
+    const now = new Date();
+    filteredVisits = analyticsData.filter(visit => {
+      const visitDate = new Date(visit.timestamp);
+      switch (timeRange) {
+        case 'today':
+          return visitDate.toDateString() === now.toDateString();
+        case 'week':
+          const weekAgo = new Date();
+          weekAgo.setDate(now.getDate() - 7);
+          return visitDate >= weekAgo;
+        case 'month':
+          const monthAgo = new Date();
+          monthAgo.setMonth(now.getMonth() - 1);
+          return visitDate >= monthAgo;
+        case 'year':
+          return visitDate.getFullYear() === now.getFullYear();
+        default:
+          return true;
+      }
+    });
+  }
+
+  const pageViews = filteredVisits.length;
+  const uniqueVisitors = new Set(filteredVisits.map(v => v.hashed_id)).size;
+
+  document.getElementById("totalVisits").textContent = pageViews || "-";
+  document.getElementById("uniqueVisitors").textContent = uniqueVisitors || "-";
+
 
   if (!statsData.top_pages || statsData.top_pages.length === 0) {
     document.getElementById("topPagesLoader").style.display = "none";
