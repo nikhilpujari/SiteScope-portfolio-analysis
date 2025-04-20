@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('timeRangeSelect').addEventListener('change', () => {
     if (dashboardData.statsData && dashboardData.analyticsData) {
       updateDashboard(dashboardData.statsData, dashboardData.analyticsData);
+      updateVisitorTrendsChartFromAnalytics(dashboardData.analyticsData, dashboardData.statsData);
     }
   });
   
